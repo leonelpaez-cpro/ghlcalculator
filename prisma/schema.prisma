@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Service {
+  id             String    @id @default(cuid())
+  name           String    @unique
+  description    String?
+  setupPrice     Int
+  monthlyPrice   Int?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // relación nueva
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+
+  planServices   PlanService[]
+
+  @@index([categoryId])
+}
+
+model ConsumableType {
+  id           String           @id @default(cuid())
+  name         String           @unique // "emails", "sms", "ia", etc.
+  unitLabel    String // "email", "sms", "token"
+  rates        ConsumableRate[]
+  usageRecords UsageRecord[] // <- relación inversa añadida
+}
+
+model ConsumableRate {
+  id               String   @id @default(cuid())
+  consumableTypeId String
+  // Precio por unidad (puede ser fraccional, ej: 0.0005 USD por token)
+  unitPrice        Float
+  currency         String   @default("USD")
+  createdAt        DateTime @default(now())
+
+  consumableType ConsumableType @relation(fields: [consumableTypeId], references: [id])
+}
+
+model Plan {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  // Fee base mensual en CENTAVOS (entero)
+  baseMonthly  Int?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  services     PlanService[]
+  usageRecords UsageRecord[] // <- relación inversa añadida
+}
+
+model PlanService {
+  id           String @id @default(cuid())
+  planId       String
+  serviceId    String
+  // Overrides por plan (en CENTAVOS)
+  setupPrice   Int?
+  monthlyPrice Int?
+
+  plan    Plan    @relation(fields: [planId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([planId, serviceId])
+}
+
+model UsageRecord {
+  id               String   @id @default(cuid())
+  planId           String
+  consumableTypeId String
+  quantity         Int
+  periodStart      DateTime
+  periodEnd        DateTime
+  createdAt        DateTime @default(now())
+
+  plan           Plan           @relation(fields: [planId], references: [id])
+  consumableType ConsumableType @relation(fields: [consumableTypeId], references: [id])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  services    Service[]
+}
+
