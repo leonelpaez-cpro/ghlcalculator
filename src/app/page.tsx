@@ -6,7 +6,7 @@ type Service = {
   id: string;
   name: string;
   description?: string | null;
-  category?: string | null;
+  category?: { id: string; name: string } | null;
   setupPrice: number;           // dólares
   monthlyPrice?: number | null; // dólares
 };
@@ -43,12 +43,15 @@ export default function Home() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
+  // ----- Drag & Drop visual feedback -----
+  const [isDraggingOverServices, setIsDraggingOverServices] = useState(false);
+
   // carga servicios
   useEffect(() => {
     (async () => {
       const res = await fetch("/api/services");
       const data: Service[] = await res.json();
-      setServices(data.map((s) => ({ ...s, category: s.category ?? "General" })));
+      setServices(data);
     })();
   }, []);
 
@@ -66,10 +69,14 @@ export default function Home() {
   const filteredServices = useMemo(() => {
     const q = query.trim().toLowerCase();
     return services.filter((s) => {
-      const text = `${s.name} ${s.description ?? ""} ${s.category ?? ""}`.toLowerCase();
+      // Excluir servicios que ya están seleccionados
+      if (selected[s.id]) return false;
+      
+      // Filtrar por búsqueda
+      const text = `${s.name} ${s.description ?? ""} ${s.category?.name ?? ""}`.toLowerCase();
       return !q || text.includes(q);
     });
-  }, [services, query]);
+  }, [services, query, selected]);
 
   const { totalSetup, totalMonthly, selectedIds, selectedItems } = useMemo(() => {
     let setup = 0;
@@ -226,14 +233,38 @@ export default function Home() {
     const id = e.dataTransfer.getData(DT_SERVICE);
     if (id) addService(id);
   };
+  const onDragEnterServices = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Solo activar si estamos arrastrando un servicio seleccionado
+    const types = Array.from(e.dataTransfer.types);
+    console.log('Drag enter services, types:', types);
+    if (types.includes(DT_SELECTED_SERVICE)) {
+      console.log('Setting drag over services to true');
+      setIsDraggingOverServices(true);
+    }
+  };
   const allowDropRemove = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    // Solo permitir drop de servicios seleccionados
+    const types = Array.from(e.dataTransfer.types);
+    if (types.includes(DT_SELECTED_SERVICE)) {
+      e.dataTransfer.dropEffect = "move";
+      setIsDraggingOverServices(true);
+    } else {
+      e.dataTransfer.dropEffect = "none";
+    }
   };
   const onDropRemove = (e: React.DragEvent) => {
     e.preventDefault();
     const id = e.dataTransfer.getData(DT_SELECTED_SERVICE);
     if (id) removeService(id);
+    setIsDraggingOverServices(false);
+  };
+  const onDragLeaveServices = (e: React.DragEvent) => {
+    // Solo resetear si realmente salimos del contenedor, no si entramos a un elemento hijo
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDraggingOverServices(false);
+    }
   };
   const onDragStartSelected = (e: React.DragEvent, serviceId: string) => {
     e.dataTransfer.setData(DT_SELECTED_SERVICE, serviceId);
@@ -280,17 +311,6 @@ export default function Home() {
 
         {activeTab === "servicios" ? (
           <>
-            {/* Zona de descarte para quitar servicios seleccionados */}
-            <div
-              onDragOver={allowDropRemove}
-              onDrop={onDropRemove}
-              className="border-2 border-dashed rounded p-3 text-sm text-gray-600"
-              aria-label="Zona para soltar y quitar servicios del plan"
-              title="Arrastra aquí servicios seleccionados para quitarlos"
-            >
-              Soltar aquí para <span className="font-semibold">quitar</span> del plan
-            </div>
-
             <div className="flex gap-2">
               <input
                 className="border rounded px-3 py-2 w-full"
@@ -301,7 +321,21 @@ export default function Home() {
               <button className="border rounded px-3" onClick={() => setQuery("")}>✕</button>
             </div>
 
-            <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
+            <div 
+              className={`space-y-2 max-h-[60vh] overflow-auto pr-1 transition-colors duration-200 ${
+                isDraggingOverServices ? 'bg-blue-50 border-2 border-blue-300 rounded' : ''
+              }`}
+              onDragEnter={onDragEnterServices}
+              onDragOver={allowDropRemove}
+              onDrop={onDropRemove}
+              onDragLeave={onDragLeaveServices}
+              aria-label="Lista de servicios disponibles - los servicios seleccionados no aparecen aquí"
+            >
+              {isDraggingOverServices && (
+                <div className="text-sm text-blue-600 font-medium text-center py-4 border-2 border-dashed border-blue-300 rounded-lg bg-blue-50">
+                  ✋ Suelta aquí para quitar del plan y volver a la lista
+                </div>
+              )}
               {filteredServices.map((s) => {
                 const checked = !!selected[s.id];
                 return (
@@ -323,7 +357,7 @@ export default function Home() {
                         {checked ? "Quitar" : "Agregar"}
                       </button>
                     </div>
-                    <div className="text-xs text-gray-500">{s.category ?? "General"}</div>
+                    <div className="text-xs text-gray-500">{s.category?.name ?? "General"}</div>
                     {s.description ? <div className="text-sm text-gray-600 mt-1">{s.description}</div> : null}
                     <div className="text-sm mt-2">
                       Setup: ${s.setupPrice?.toFixed(2) ?? "0.00"}{" "}
@@ -333,7 +367,9 @@ export default function Home() {
                 );
               })}
               {filteredServices.length === 0 && (
-                <div className="text-gray-500 text-sm">No hay resultados.</div>
+                <div className="text-gray-500 text-sm">
+                  {query.trim() ? "No hay resultados." : "Todos los servicios están en el plan. Arrastra servicios del plan de vuelta aquí para quitarlos."}
+                </div>
               )}
             </div>
           </>
@@ -379,11 +415,29 @@ export default function Home() {
                     : "Arrastra servicios desde la izquierda o pulsa “Agregar”. Luego guarda como un plan nuevo."}
                 </p>
               </div>
-              <div className="text-right">
-                <div>Setup total: <strong>${totalSetup.toFixed(2)}</strong></div>
-                <div>Mensual total: <strong>${totalMonthly.toFixed(2)}</strong></div>
-              </div>
+
             </header>
+
+            <div className="flex gap-2 justify-end">
+              <a 
+                href="/admin/services" 
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Administrar servicios"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </a>
+              <a 
+                href="/admin/categories" 
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Administrar categorías"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </a>
+            </div>
 
             <section className="grid sm:grid-cols-2 gap-3">
               <div className="col-span-1">
@@ -425,9 +479,16 @@ export default function Home() {
             </section>
 
             <section className="border rounded-xl p-4">
-              <div className="font-semibold mb-2">
-                Servicios {editingPlanId ? "del plan (editables)" : "seleccionados"} ({selectedIds.length})
-                — arrástralos a la izquierda para quitarlos.
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-semibold">
+                  Servicios {editingPlanId ? "del plan (editables)" : "seleccionados"} ({selectedIds.length})
+                  — arrastra de vuelta a la lista de servicios para quitarlos y que vuelvan a aparecer disponibles.
+                </div>
+                <div className="text-right bg-gray-50 px-3 py-2 rounded border">
+                  <div className="text-sm text-gray-600">Precios del plan:</div>
+                  <div className="font-semibold">Setup: <span className="text-green-600">${totalSetup.toFixed(2)}</span></div>
+                  <div className="font-semibold">Mensual: <span className="text-blue-600">${totalMonthly.toFixed(2)}</span></div>
+                </div>
               </div>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {selectedItems.map((s) => (
@@ -438,13 +499,13 @@ export default function Home() {
                     onDragStart={(e) => onDragStartSelected(e, s.id)}
                     aria-grabbed="true"
                     role="button"
-                    title="Arrastra a la zona de descarte para quitar"
+                    title="Arrastra de vuelta a la lista de servicios para quitar y que vuelva a aparecer disponible"
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">{s.name}</div>
                       <button className="text-xs underline" onClick={() => removeService(s.id)}>Quitar</button>
                     </div>
-                    <div className="text-xs text-gray-500">{s.category ?? "General"}</div>
+                    <div className="text-xs text-gray-500">{s.category?.name ?? "General"}</div>
                     <div className="text-sm mt-1">
                       Setup: ${s.setupPrice?.toFixed(2) ?? "0.00"}{" "}
                       {s.monthlyPrice != null && <>| Mensual: ${s.monthlyPrice.toFixed(2)}</>}
@@ -501,7 +562,7 @@ export default function Home() {
                       return (
                         <div key={ps.id} className="border rounded-lg p-3">
                           <div className="font-semibold">{s.name}</div>
-                          <div className="text-xs text-gray-500">{s.category ?? "General"}</div>
+                          <div className="text-xs text-gray-500">{s.category?.name ?? "General"}</div>
                           <div className="text-sm mt-1">
                             Setup: ${(ps.setupPrice ?? s.setupPrice ?? 0).toFixed(2)}{" "}
                             {(ps.monthlyPrice ?? s.monthlyPrice) != null && (

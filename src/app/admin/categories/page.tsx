@@ -8,20 +8,39 @@ export default function CategoriesAdmin() {
   const [form, setForm] = useState({ name: "", description: "" });
 
   const load = async () => {
-    const res = await fetch("/api/categories");
-    setCats(await res.json());
+    try {
+      const res = await fetch("/api/categories");
+      if (!res.ok) {
+        console.error("Error loading categories:", res.status, res.statusText);
+        setCats([]);
+        return;
+      }
+      const data = await res.json();
+      setCats(data);
+    } catch (error) {
+      console.error("Error loading categories:", error);
+      setCats([]);
+    }
   };
   useEffect(() => { load(); }, []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/categories", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.name, description: form.description || null }),
-    });
-    if (!res.ok) return alert("No se pudo crear");
-    setForm({ name: "", description: "" });
-    load();
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, description: form.description || null }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        return alert("No se pudo crear: " + (error.error || res.statusText));
+      }
+      setForm({ name: "", description: "" });
+      load();
+    } catch (error) {
+      console.error("Error creating category:", error);
+      alert("Error al crear la categoría");
+    }
   };
 
   const rename = async (c: Category) => {
