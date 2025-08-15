@@ -1,0 +1,8 @@
+[33m9c1264e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Prepare for Vercel deployment - add vercel.json and fix package.json
+[33m1f8bf10[m chore: remove package-lock.json (use pnpm only)
+[33mc988f55[m fix: sync package.json and pnpm-lock.yaml
+[33m577b64d[m chore: lockfile sync
+[33med2f19d[m chore: remove pnpm workspace (single package)
+[33mc5e80cf[m subiendo todo de nuevo
+[33m4158e28[m feat: últimos cambios
+[33mb1463a3[m primer commit
