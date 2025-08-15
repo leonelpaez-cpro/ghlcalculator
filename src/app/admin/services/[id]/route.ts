@@ -10,11 +10,12 @@ function toDollar(s: any) {
   };
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { name, description, categoryId, setupPrice, monthlyPrice, isActive } = await req.json();
 
   const updated = await prisma.service.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: name?.trim() || undefined,
       description: description === undefined ? undefined : description,
@@ -29,12 +30,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(toDollar(updated));
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  // opcional: impedir borrar si está usado en algún plan
-  const count = await prisma.planService.count({ where: { serviceId: params.id } });
-  if (count > 0) {
-    return NextResponse.json({ error: "El servicio está en uso por algún plan." }, { status: 409 });
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    // opcional: impedir borrar si está usado en algún plan
+    const count = await prisma.planService.count({ where: { serviceId: id } });
+    if (count > 0) {
+      return NextResponse.json({ error: "El servicio está en uso por algún plan." }, { status: 409 });
+    }
+    await prisma.service.delete({ where: { id } });
+    return NextResponse.json(null, { status: 204 });
+  } catch (error) {
+    return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 });
   }
-  await prisma.service.delete({ where: { id: params.id } });
-  return new NextResponse(null, { status: 204 });
 }

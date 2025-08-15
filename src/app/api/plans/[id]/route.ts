@@ -31,10 +31,11 @@ function toDollars(plan: any) {
  */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const plan = await prisma.plan.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { services: { include: { service: true } } },
   });
   if (!plan) {
@@ -53,9 +54,9 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const { id } = await params;
   const body = await req.json().catch(() => ({})) as {
     name?: string;
     serviceIds?: string[];
@@ -142,16 +143,20 @@ export async function PATCH(
  */
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  try {
+    const { id } = await params;
 
-  // Asegura limpieza de relaciones
-  await prisma.$transaction([
-    prisma.planService.deleteMany({ where: { planId: id } }),
-    prisma.plan.delete({ where: { id } }),
-  ]);
+    // Asegura limpieza de relaciones
+    await prisma.$transaction([
+      prisma.planService.deleteMany({ where: { planId: id } }),
+      prisma.plan.delete({ where: { id } }),
+    ]);
 
-  return new NextResponse(null, { status: 204 });
+    return NextResponse.json(null, { status: 204 });
+  } catch (error) {
+    return NextResponse.json({ error: "Error al eliminar el plan" }, { status: 500 });
+  }
 }
 

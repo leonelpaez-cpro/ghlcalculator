@@ -1,6 +1,7 @@
 // src/app/page.tsx
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Service = {
   id: string;

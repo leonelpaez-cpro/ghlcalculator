@@ -19,8 +19,9 @@ function toDollar(row: any) {
   };
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const body = await req.json();
 
     const name: string | undefined =
@@ -47,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       typeof body?.isActive === "boolean" ? body.isActive : undefined;
 
     const updated = await prisma.service.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name,
         description,
@@ -61,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     return NextResponse.json(toDollar(updated));
   } catch (e: any) {
-    console.error(`PATCH /api/services/${params.id} error:`, e);
+    console.error(`PATCH /api/services/${params} error:`, e);
     return NextResponse.json(
       { error: e?.message ?? "Error actualizando servicio" },
       { status: 500 }
@@ -69,20 +70,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // opcional: impedir borrar si está en uso
-    const count = await prisma.planService.count({ where: { serviceId: params.id } });
+    const count = await prisma.planService.count({ where: { serviceId: id } });
     if (count > 0) {
       return NextResponse.json(
         { error: "El servicio está en uso por algún plan." },
         { status: 409 }
       );
     }
-    await prisma.service.delete({ where: { id: params.id } });
-    return new NextResponse(null, { status: 204 });
+    await prisma.service.delete({ where: { id } });
+    return NextResponse.json(null, { status: 204 });
   } catch (e: any) {
-    console.error(`DELETE /api/services/${params.id} error:`, e);
+    console.error(`DELETE /api/services/${params} error:`, e);
     return NextResponse.json(
       { error: e?.message ?? "Error eliminando servicio" },
       { status: 500 }
